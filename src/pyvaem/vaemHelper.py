@@ -1,4 +1,6 @@
 from enum import IntEnum, Enum
+from dataclasses import dataclass
+import struct
 
 
 valveSettings = {
@@ -22,6 +24,82 @@ vaemValveIndex = {
     8: 0x80,
     "AllValves": 255,
 }
+
+
+@dataclass(frozen=True)
+class VaemRegisters:
+    access: int
+    dataType: int
+    paramIndex: int
+    paramSubIndex: int
+    errorRet: int
+    transferValue: int
+
+    @classmethod
+    def from_dict(self, data: dict) -> "VaemRegisters":
+        """Constructs a VaemRegisters object from a dictionary."""
+        if data is None or len(data) == 0:
+            return None
+        return VaemRegisters(
+            access=data["access"],
+            dataType=data["dataType"],
+            paramIndex=data["paramIndex"],
+            paramSubIndex=data["paramSubIndex"],
+            errorRet=data["errorRet"],
+            transferValue=data["transferValue"],
+        )
+
+    def to_dict(self) -> dict:
+        """Converts the VaemRegisters object to a dictionary."""
+        return self.__dict__
+
+    @classmethod
+    def from_list(cls, registers: list[int]) -> "VaemRegisters":
+        """Constructs a VaemRegisters object from a list of integers."""
+        if registers is None or len(registers) == 0:
+            return None
+        return _deconstruct_registers(registers)
+
+    def to_list(self) -> list[int]:
+        """Converts the VaemRegisters object to a list of integers."""
+        return _construct_registers(self)
+
+
+def _construct_registers(vaem_reg: VaemRegisters) -> list[int]:
+    data = vaem_reg.to_dict()
+    tmp = struct.pack(
+        ">BBHBBQ",
+        data["access"],
+        data["dataType"],
+        data["paramIndex"],
+        data["paramSubIndex"],
+        data["errorRet"],
+        data["transferValue"],
+    )
+
+    return [(tmp[i] << 8) + tmp[i + 1] for i in range(0, len(tmp) - 1, 2)]
+
+
+def _deconstruct_registers(registers: list[int]) -> VaemRegisters:
+    if registers is None or len(registers) == 0:
+        return None
+
+    access = (registers[0] & 0xFF00) >> 8
+    dataType = registers[0] & 0x00FF
+    paramIndex = registers[1]
+    paramSubIndex = (registers[2] & 0xFF00) >> 8
+    errorRet = registers[2] & 0x00FF
+
+    transferValue = sum(registers[len(registers) - 1 - i] << (i * 16) for i in range(4))
+
+    return VaemRegisters(
+        access=access,
+        dataType=dataType,
+        paramIndex=paramIndex,
+        paramSubIndex=paramSubIndex,
+        errorRet=errorRet,
+        transferValue=transferValue,
+    )
 
 
 class VaemAccess(IntEnum):
@@ -64,15 +142,17 @@ class VaemValveIndex(IntEnum):
     AllValves = 255
 """
 
+
 class VaemRanges(Enum):
-    NominalVoltage = (8000, 24000+1)
-    InrushCurrent = (20, 1000+1)
-    HoldingCurrent = (20, 400+1)
-    ResponseTime = (1, (2**32)-1+1)
-    PickUpTime = (1, 500+1)
-    TimeDelay = (0, (2**32)-1+1)
-    HitNHold = (0, 1000+1)
-    SelectValve = (0, 255+1)
+    NominalVoltage = (8000, 24000 + 1)
+    InrushCurrent = (20, 1000 + 1)
+    HoldingCurrent = (20, 400 + 1)
+    ResponseTime = (1, (2**32) - 1 + 1)
+    PickUpTime = (1, 500 + 1)
+    TimeDelay = (0, (2**32) - 1 + 1)
+    HitNHold = (0, 1000 + 1)
+    SelectValve = (0, 255 + 1)
+
 
 class VaemControlWords(IntEnum):
     StartValves = 0x01
@@ -103,7 +183,7 @@ def parse_statusword(statusWord):
     return status
 
 
-def get_transfer_value(param, valve, opperation, **settings):
+def get_transfer_value(param, valve, opperation, **settings) -> VaemRegisters:
     out = {}
     if param == VaemIndex.NominalVoltage:
         out["access"] = opperation
@@ -163,4 +243,4 @@ def get_transfer_value(param, valve, opperation, **settings):
         out["transferValue"] = valve
     else:
         print("Invalid input param")
-    return out
+    return VaemRegisters.from_dict(out)
