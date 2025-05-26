@@ -1,4 +1,6 @@
 from enum import IntEnum, Enum
+from dataclasses import dataclass
+import struct
 
 
 valveSettings = {
@@ -22,6 +24,82 @@ vaemValveIndex = {
     8: 0x80,
     "AllValves": 255,
 }
+
+
+@dataclass(frozen=True)
+class VaemRegisters:
+    access: int
+    dataType: int
+    paramIndex: int
+    paramSubIndex: int
+    errorRet: int
+    transferValue: int
+
+    @classmethod
+    def from_dict(self, data: dict) -> "VaemRegisters":
+        """Constructs a VaemRegisters object from a dictionary."""
+        if data is None or len(data) == 0:
+            return None
+        return VaemRegisters(
+            access=data["access"],
+            dataType=data["dataType"],
+            paramIndex=data["paramIndex"],
+            paramSubIndex=data["paramSubIndex"],
+            errorRet=data["errorRet"],
+            transferValue=data["transferValue"],
+        )
+
+    def to_dict(self) -> dict:
+        """Converts the VaemRegisters object to a dictionary."""
+        return self.__dict__
+
+    @classmethod
+    def from_list(cls, registers: list[int]) -> "VaemRegisters":
+        """Constructs a VaemRegisters object from a list of integers."""
+        if registers is None or len(registers) == 0:
+            return None
+        return _deconstruct_registers(registers)
+
+    def to_list(self) -> list[int]:
+        """Converts the VaemRegisters object to a list of integers."""
+        return _construct_registers(self)
+
+
+def _construct_registers(vaem_reg: VaemRegisters) -> list[int]:
+    data = vaem_reg.to_dict()
+    tmp = struct.pack(
+        ">BBHBBQ",
+        data["access"],
+        data["dataType"],
+        data["paramIndex"],
+        data["paramSubIndex"],
+        data["errorRet"],
+        data["transferValue"],
+    )
+
+    return [(tmp[i] << 8) + tmp[i + 1] for i in range(0, len(tmp) - 1, 2)]
+
+
+def _deconstruct_registers(registers: list[int]) -> VaemRegisters:
+    if registers is None or len(registers) == 0:
+        return None
+
+    access = (registers[0] & 0xFF00) >> 8
+    dataType = registers[0] & 0x00FF
+    paramIndex = registers[1]
+    paramSubIndex = (registers[2] & 0xFF00) >> 8
+    errorRet = registers[2] & 0x00FF
+
+    transferValue = sum(registers[len(registers) - 1 - i] << (i * 16) for i in range(4))
+
+    return VaemRegisters(
+        access=access,
+        dataType=dataType,
+        paramIndex=paramIndex,
+        paramSubIndex=paramSubIndex,
+        errorRet=errorRet,
+        transferValue=transferValue,
+    )
 
 
 class VaemAccess(IntEnum):
@@ -64,15 +142,17 @@ class VaemValveIndex(IntEnum):
     AllValves = 255
 """
 
+
 class VaemRanges(Enum):
-    NominalVoltage = (8000, 24000+1)
-    InrushCurrent = (20, 1000+1)
-    HoldingCurrent = (20, 400+1)
-    ResponseTime = (1, (2**32)-1+1)
-    PickUpTime = (1, 500+1)
-    TimeDelay = (0, (2**32)-1+1)
-    HitNHold = (0, 1000+1)
-    SelectValve = (0, 255+1)
+    NominalVoltage = (8000, 24000 + 1)
+    InrushCurrent = (20, 1000 + 1)
+    HoldingCurrent = (20, 400 + 1)
+    ResponseTime = (1, (2**32) - 1 + 1)
+    PickUpTime = (1, 500 + 1)
+    TimeDelay = (0, (2**32) - 1 + 1)
+    HitNHold = (0, 1000 + 1)
+    SelectValve = (0, 255 + 1)
+
 
 class VaemControlWords(IntEnum):
     StartValves = 0x01
@@ -86,7 +166,7 @@ class VaemOperatingMode(IntEnum):
     OpMode3 = 0x02
 
 
-def parse_statusword(statusWord):
+def parse_statusword(statusWord: int):
     status = {}
     status["Status"] = statusWord & 0x01
     status["Error"] = (statusWord & 0x08) >> 3
@@ -103,64 +183,48 @@ def parse_statusword(statusWord):
     return status
 
 
-def get_transfer_value(param, valve, opperation, **settings):
-    out = {}
-    if param == VaemIndex.NominalVoltage:
-        out["access"] = opperation
-        out["dataType"] = VaemDataType.UINT16.value
-        out["paramIndex"] = VaemIndex.NominalVoltage.value
-        out["paramSubIndex"] = valve
-        out["errorRet"] = 0
-        out["transferValue"] = settings["NominalVoltage"]
-    elif param == VaemIndex.ResponseTime:
-        out["access"] = opperation
-        out["dataType"] = VaemDataType.UINT32.value
-        out["paramIndex"] = VaemIndex.ResponseTime.value
-        out["paramSubIndex"] = valve
-        out["errorRet"] = 0
-        out["transferValue"] = settings["ResponseTime"]
-    elif param == VaemIndex.InrushCurrent:
-        out["access"] = opperation
-        out["dataType"] = VaemDataType.UINT16.value
-        out["paramIndex"] = VaemIndex.InrushCurrent.value
-        out["paramSubIndex"] = valve
-        out["errorRet"] = 0
-        out["transferValue"] = settings["InrushCurrent"]
-    elif param == VaemIndex.HoldingCurrent:
-        out["access"] = opperation
-        out["dataType"] = VaemDataType.UINT16.value
-        out["paramIndex"] = VaemIndex.HoldingCurrent.value
-        out["paramSubIndex"] = valve
-        out["errorRet"] = 0
-        out["transferValue"] = settings["HoldingCurrent"]
-    elif param == VaemIndex.PickUpTime:
-        out["access"] = opperation
-        out["dataType"] = VaemDataType.UINT16.value
-        out["paramIndex"] = VaemIndex.PickUpTime.value
-        out["paramSubIndex"] = valve
-        out["errorRet"] = 0
-        out["transferValue"] = settings["PickUpTime"]
-    elif param == VaemIndex.TimeDelay:
-        out["access"] = opperation
-        out["dataType"] = VaemDataType.UINT32.value
-        out["paramIndex"] = VaemIndex.TimeDelay.value
-        out["paramSubIndex"] = valve
-        out["errorRet"] = 0
-        out["transferValue"] = settings["TimeDelay"]
-    elif param == VaemIndex.HitNHold:
-        out["access"] = opperation
-        out["dataType"] = VaemDataType.UINT32.value
-        out["paramIndex"] = VaemIndex.HitNHold.value
-        out["paramSubIndex"] = valve
-        out["errorRet"] = 0
-        out["transferValue"] = settings["HitNHold"]
-    elif param == VaemIndex.SelectValve:
-        out["access"] = opperation
-        out["dataType"] = VaemDataType.UINT8.value
-        out["paramIndex"] = VaemIndex.SelectValve.value
-        out["paramSubIndex"] = 0
-        out["errorRet"] = 0
-        out["transferValue"] = valve
-    else:
-        print("Invalid input param")
-    return out
+SETTING_DATA_TYPES = {
+    VaemIndex.NominalVoltage: VaemDataType.UINT16,
+    VaemIndex.ResponseTime: VaemDataType.UINT32,
+    VaemIndex.InrushCurrent: VaemDataType.UINT16,
+    VaemIndex.HoldingCurrent: VaemDataType.UINT16,
+    VaemIndex.PickUpTime: VaemDataType.UINT16,
+    VaemIndex.TimeDelay: VaemDataType.UINT32,
+    VaemIndex.HitNHold: VaemDataType.UINT32,
+    VaemIndex.SelectValve: VaemDataType.UINT8,
+}
+
+
+def create_setting_registers(
+    param: VaemIndex, valve: int, operation: int, **settings
+) -> VaemRegisters:
+    return VaemRegisters(
+        access=operation,
+        dataType=SETTING_DATA_TYPES[param].value,
+        paramIndex=param.value,
+        paramSubIndex=valve,
+        errorRet=0,
+        transferValue=settings.get(param.name, 0),
+    )
+
+
+def create_select_valve_registers(operation: int, valve_code: int) -> VaemRegisters:
+    return VaemRegisters(
+        access=operation,
+        dataType=VaemDataType.UINT8.value,
+        paramIndex=VaemIndex.SelectValve.value,
+        paramSubIndex=0,
+        errorRet=0,
+        transferValue=valve_code,
+    )
+
+
+def create_controlword_registers(operation: int, control_word: int) -> VaemRegisters:
+    return VaemRegisters(
+        access=operation,
+        dataType=VaemDataType.UINT16.value,
+        paramIndex=VaemIndex.ControlWord.value,
+        paramSubIndex=0,
+        errorRet=0,
+        transferValue=control_word,
+    )

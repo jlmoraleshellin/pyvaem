@@ -1,11 +1,23 @@
 import logging
-import struct
 import time
 
 from pymodbus.client import ModbusTcpClient as TcpClient
 
 from pyvaem.dataTypes import VaemConfig
-from pyvaem.vaemHelper import *
+from pyvaem.vaemHelper import (
+    VaemAccess,
+    VaemControlWords,
+    VaemDataType,
+    VaemIndex,
+    VaemRanges,
+    VaemOperatingMode,
+    VaemRegisters,
+    create_setting_registers,
+    create_select_valve_registers,
+    create_controlword_registers,
+    parse_statusword,
+    vaemValveIndex,
+)
 
 readParam = {
     "address": 0,
@@ -38,12 +50,12 @@ error_codes = {
 def handle_error_response(func):
     def wrapper(self: vaemDriver, *args, **kwargs):
         if self._init_done:
-            result = func(self, *args, **kwargs)
+            result: VaemRegisters = func(self, *args, **kwargs)
 
             if result is None:
                 return result
 
-            error = result["errorRet"]
+            error = result.errorRet
             if error != 0:
                 self._log.error(f"{error_codes[error]}")
                 self.clear_error()
@@ -53,37 +65,6 @@ def handle_error_response(func):
             self._log.warning("No VAEM Connected")
 
     return wrapper
-
-def _construct_registers(data: dict):
-    register = []
-    tmp = struct.pack(
-        ">BBHBBQ",
-        data["access"],
-        data["dataType"],
-        data["paramIndex"],
-        data["paramSubIndex"],
-        data["errorRet"],
-        data["transferValue"],
-    )
-
-    for i in range(0, len(tmp) - 1, 2):
-        register.append((tmp[i] << 8) + tmp[i + 1])
-
-    return register
-
-def _deconstruct_registers(registers: list):
-    data = {}
-    if registers is not None:
-        data["access"] = (registers[0] & 0xFF00) >> 8
-        data["dataType"] = registers[0] & 0x00FF
-        data["paramIndex"] = registers[1]
-        data["paramSubIndex"] = (registers[2] & 0xFF00) >> 8
-        data["errorRet"] = registers[2] & 0x00FF
-        data["transferValue"] = 0
-        for i in range(4):
-            data["transferValue"] += registers[len(registers) - 1 - i] << (i * 16)
-
-    return data
 
 
 class vaemDriver:
@@ -105,33 +86,14 @@ class vaemDriver:
 
         self._log.info(f"Connected to VAEM : {self._config}")
         self._init_done = True
-        self._vaem_init()
+        self._initialize()
 
-    def _vaem_init(self):
-        data = {}
-        if self._init_done:
-            # set operating mode
-            data["access"] = VaemAccess.Write.value
-            data["dataType"] = VaemDataType.UINT8.value
-            data["paramIndex"] = VaemIndex.OperatingMode.value
-            data["paramSubIndex"] = 0
-            data["errorRet"] = 0
-            data["transferValue"] = VaemOperatingMode.OpMode1.value
-            register = _construct_registers(data)
-            self._transfer(register)
+    def _initialize(self):
+        # Set operating mode to API control
+        self.set_operating_mode(VaemOperatingMode.OpMode1.value)
+        self.clear_error()
 
-            # clear errors
-            data["access"] = VaemAccess.Write.value
-            data["dataType"] = VaemDataType.UINT16.value
-            data["paramIndex"] = VaemIndex.ControlWord.value
-            data["transferValue"] = VaemControlWords.ResetErrors.value
-            register = _construct_registers(data)
-            self._transfer(register)
-        else:
-            self._log.warning("No VAEM Connected!! CANNOT INITIALIZE")
-
-    # read write oppeartion is constant and custom modbus is implemented on top
-    def _transfer(self, writeData: list) -> list:
+    def _read_write_registers(self, writeData: list) -> list:
         try:
             data = self.client.readwrite_registers(
                 read_address=readParam["address"],
@@ -145,21 +107,36 @@ class vaemDriver:
             self._log.error(f"Something went wrong with read opperation VAEM : {e}")
             return []
 
+    def _transfer_vaem_registers(self, vaem_reg: VaemRegisters) -> VaemRegisters:
+        """Helper method to handle the common transfer pattern"""
+        resp = self._read_write_registers(vaem_reg.to_list())
+        return VaemRegisters.from_list(resp)
+
     @handle_error_response
-    def save_settings(self) -> dict:
-        data = {}
-        register = []
+    def set_operating_mode(self, mode: VaemOperatingMode):
+        """Set the operating mode of the VAEM"""
+        data = VaemRegisters(
+            access=VaemAccess.Write.value,
+            dataType=VaemDataType.UINT8.value,
+            paramIndex=VaemIndex.OperatingMode.value,
+            paramSubIndex=0,
+            errorRet=0,
+            transferValue=mode.value,
+        )
+        return self._transfer_vaem_registers(data)
 
-        data["access"] = VaemAccess.Write.value
-        data["dataType"] = VaemDataType.UINT32.value
-        data["paramIndex"] = VaemIndex.SaveParameters.value
-        data["paramSubIndex"] = 0
-        data["errorRet"] = 0
-        data["transferValue"] = 99999
-        register = _construct_registers(data)
-        resp = self._transfer(register)
+    @handle_error_response
+    def save_settings(self):
+        data = VaemRegisters(
+            access=VaemAccess.Write.value,
+            dataType=VaemDataType.UINT32.value,
+            paramIndex=VaemIndex.SaveParameters.value,
+            paramSubIndex=0,
+            errorRet=0,
+            transferValue=99999,
+        )
 
-        return _deconstruct_registers(resp)
+        return self._transfer_vaem_registers(data)
 
     @handle_error_response
     def select_valve(self, valve_id: int):
@@ -171,31 +148,19 @@ class vaemDriver:
         raises:
             ValueError - raised if the valve id is not supported
         """
-        data = {}
         if valve_id in range(1, 9):
-            # get currently selected valves
-            data = get_transfer_value(
-                VaemIndex.SelectValve,
-                vaemValveIndex[valve_id],
-                VaemAccess.Read.value,
-                **{},
-            )
-            register = _construct_registers(data)
-            resp = self._transfer(register)
-            # select new valve
-            data = get_transfer_value(
-                VaemIndex.SelectValve,
-                vaemValveIndex[valve_id] | _deconstruct_registers(resp)["transferValue"],
-                VaemAccess.Write.value,
-                **{},
-            )
-            register = _construct_registers(data)
-            resp = self._transfer(register)
-
-            return _deconstruct_registers(resp)
-        else:
             self._log.error("valve_id must be between 1-8")
             raise ValueError
+
+        # get currently selected valves
+        data = create_select_valve_registers(VaemAccess.Read.value, 0)
+        resp = self._transfer_vaem_registers(data)
+
+        # select new valve
+        data = create_select_valve_registers(
+            VaemAccess.Write.value, vaemValveIndex[valve_id] | resp.transferValue
+        )
+        return self._transfer_vaem_registers(data)
 
     @handle_error_response
     def deselect_valve(self, valve_id: int) -> dict:
@@ -206,32 +171,19 @@ class vaemDriver:
         raises:
             ValueError - raised if the valve id is not supported
         """
-        data = {}
         if valve_id in range(1, 9):
-            # get currently selected valves
-            data = get_transfer_value(
-                VaemIndex.SelectValve,
-                vaemValveIndex[valve_id],
-                VaemAccess.Read.value,
-                **{},
-            )
-            register = _construct_registers(data)
-            resp = self._transfer(register)
-            # deselect new valve
-            data = get_transfer_value(
-                VaemIndex.SelectValve,
-                _deconstruct_registers(resp)["transferValue"]
-                & (~(vaemValveIndex[valve_id])),
-                VaemAccess.Write.value,
-                **{},
-            )
-            register = _construct_registers(data)
-            resp = self._transfer(register)
-
-            return _deconstruct_registers(resp)
-        else:
             self._log.error("valve_id must be between 1-8")
             raise ValueError
+
+        # get currently selected valves
+        data = create_select_valve_registers(VaemAccess.Read.value, 0)
+        resp = self._transfer_vaem_registers(data)
+
+        # deselect new valve
+        data = create_select_valve_registers(
+            VaemAccess.Write.value, resp.transferValue & (~(vaemValveIndex[valve_id]))
+        )
+        return self._transfer_vaem_registers(data)
 
     @handle_error_response
     def select_valves(self, states: list[int]):
@@ -252,16 +204,9 @@ class vaemDriver:
         binary_string = "".join(str(state) for state in reversed_states)
         decimal_code = int(binary_string, 2)
 
-        data = {}
-
         # Select valves by directly writing the binary pattern
-        data = get_transfer_value(
-            VaemIndex.SelectValve, decimal_code, VaemAccess.Write.value, **{}
-        )
-        register = _construct_registers(data)
-        resp = self._transfer(register)
-
-        return _deconstruct_registers(resp)
+        data = create_select_valve_registers(VaemAccess.Write.value, decimal_code)
+        return self._transfer_vaem_registers(data)
 
     # TODO refactor this method to handle errors individually
     def configure_valves(self, valve_id, settings: dict[VaemIndex, int]):
@@ -285,14 +230,13 @@ class vaemDriver:
             if value in range(
                 *getattr(VaemRanges, param.name).value
             ) and valve_id in range(1, 9):
-                data = get_transfer_value(
+                data = create_setting_registers(
                     param,
                     valve_id - 1,  # Valve id starts at 0 for settings
                     VaemAccess.Write.value,
                     **{param.name: int(value)},
                 )
-                register = _construct_registers(data)
-                resp = self._transfer(register)
+                self._transfer_vaem_registers(data)
             else:
                 valid_range = getattr(VaemRanges, param.name).value
                 raise ValueError(
@@ -304,16 +248,13 @@ class vaemDriver:
         """Set a specific valve's response time (opening time)"""
         data = {}
         if (opening_time in range(0, (2**32))) and (valve_id in range(1, 9)):
-            data = get_transfer_value(
+            data = create_setting_registers(
                 VaemIndex.ResponseTime,
                 valve_id - 1,  # Valve id starts at 0 for settings
                 VaemAccess.Write.value,
                 **{"ResponseTime": int(opening_time)},
             )
-            register = _construct_registers(data)
-            resp = self._transfer(register)
-
-            return _deconstruct_registers(resp)
+            return self._transfer_vaem_registers(data)
         else:
             self._log.error("opening time must be in range 0-2000 and valve_id -> 1-8")
             raise ValueError
@@ -323,16 +264,13 @@ class vaemDriver:
         """Set a specific valve's inrush current"""
         data = {}
         if (inrush_current in range(20, 1000)) and (valve_id in range(1, 9)):
-            data = get_transfer_value(
+            data = create_setting_registers(
                 VaemIndex.InrushCurrent,
                 valve_id - 1,  # Valve id starts at 0 for settings
                 VaemAccess.Write.value,
                 **{"InrushCurrent": int(inrush_current)},
             )
-            register = _construct_registers(data)
-            resp = self._transfer(register)
-
-            return _deconstruct_registers(resp)
+            return self._transfer_vaem_registers(data)
         else:
             self._log.error(
                 "inrush current must be in range 20-1000 and valve_id -> 1-8"
@@ -355,100 +293,59 @@ class vaemDriver:
         if not hasattr(VaemRanges, setting.name):
             raise ValueError(f"VaemIndex {setting.name} is not a setting")
 
-        data = get_transfer_value(
+        data = create_setting_registers(
             setting,
             valve_id - 1,  # Valve id starts at 0 for settings
             VaemAccess.Read.value,
             **{setting.name: 0},
         )
-        register = _construct_registers(data)
-        resp = self._transfer(register)
-
-        return _deconstruct_registers(resp)
+        return self._transfer_vaem_registers(data)
 
     @handle_error_response
     def start_valves(self):
         """
         Start all valves that are selected
         """
-        data = {}
-        data["access"] = VaemAccess.Write.value
-        data["dataType"] = VaemDataType.UINT16.value
-        data["paramIndex"] = VaemIndex.ControlWord.value
-        data["paramSubIndex"] = 0
-        data["errorRet"] = 0
-        data["transferValue"] = VaemControlWords.StartValves.value
-        register = _construct_registers(data)
-        resp = self._transfer(register)
-
-        return _deconstruct_registers(resp)
+        data = create_controlword_registers(
+            VaemAccess.Write.value, VaemControlWords.StartValves.value
+        )
+        return self._transfer_vaem_registers(data)
 
     @handle_error_response
     def reset_control_word(self):
-        """ "Reset control word"""
-        data = {}
-        data["access"] = VaemAccess.Write.value
-        data["dataType"] = VaemDataType.UINT16.value
-        data["paramIndex"] = VaemIndex.ControlWord.value
-        data["paramSubIndex"] = 0
-        data["errorRet"] = 0
-        data["transferValue"] = 0
-        register = _construct_registers(data)
-        resp = self._transfer(register)
-
-        return _deconstruct_registers(resp)
+        """Reset control word"""
+        data = create_controlword_registers(VaemAccess.Write.value, 0)
+        return self._transfer_vaem_registers(data)
 
     def open_valve(self):
-        """
-        Start all valves that are selected
-        """
+        """Start all valves that are selected"""
         self.open_valve()
         # TODO add a buffer
         self.reset_control_word()
 
     @handle_error_response
     def close_valve(self):
-        data = {}
-        # save settings
-        data["access"] = VaemAccess.Write.value
-        data["dataType"] = VaemDataType.UINT16.value
-        data["paramIndex"] = VaemIndex.ControlWord.value
-        data["paramSubIndex"] = 0
-        data["errorRet"] = 0
-        data["transferValue"] = VaemControlWords.StopValves.value
-
-        register = _construct_registers(data)
-        resp = self._transfer(register)
-
-        return _deconstruct_registers(resp)
+        data = create_controlword_registers(
+            VaemAccess.Write.value, VaemControlWords.StopValves.value
+        )
+        return self._transfer_vaem_registers(data)
 
     def read_valves_state(self):
-        data = {}
-        if self._init_done:
-            # get currently selected valves
-            data = get_transfer_value(
-                VaemIndex.SelectValve,
-                0,
-                VaemAccess.Read.value,
-                **{},
-            )
-            register = _construct_registers(data)
-            resp = self._transfer(register)
-
-            # Get states from response
-            decimal_code = _deconstruct_registers(resp)["transferValue"]
-
-            # Convert to binary and ensure it's 8 bits (pad with leading zeros if needed)
-            binary_string = format(decimal_code, "08b")
-            # Convert to list of integers and reverse to match user-expected order
-            states = [int(bit) for bit in binary_string]
-            states.reverse()
-
-            return states
-
-        else:
+        if not self._init_done:
             self._log.warning("No VAEM Connected!!")
             return None
+
+        # get currently selected valves
+        data = create_select_valve_registers(VaemAccess.Read.value, 0)
+        resp = self._transfer_vaem_registers(data)
+
+        # Convert to binary and ensure it's 8 bits (pad with leading zeros if needed)
+        binary_string = format(resp.transferValue, "08b")
+        # Convert to list of integers and reverse to match user-expected order
+        states = [int(bit) for bit in binary_string]
+        states.reverse()
+
+        return states
 
     @handle_error_response
     def _read_status_word(self):
@@ -458,28 +355,24 @@ class vaemDriver:
         -> status: 1 if more than 1 valve is active
         -> error: 1 if error in valves is present
         """
-        data = {}
-        # save settings
-        data["access"] = VaemAccess.Read.value
-        data["dataType"] = VaemDataType.UINT16.value
-        data["paramIndex"] = VaemIndex.StatusWord.value
-        data["paramSubIndex"] = 0
-        data["errorRet"] = 0
-        data["transferValue"] = 0
-
-        register = _construct_registers(data)
-        resp = self._transfer(register)
-
-        return _deconstruct_registers(resp)
+        data = VaemRegisters(
+            access=VaemAccess.Read.value,
+            dataType=VaemDataType.UINT16.value,
+            paramIndex=VaemIndex.StatusWord.value,
+            paramSubIndex=0,
+            errorRet=0,
+            transferValue=0,
+        )
+        return self._transfer_vaem_registers(data)
 
     def get_status(self):
         """
         Get the status of the VAEM
-        The status is return as a dictionary with the following keys:
+        The status is returned as a dictionary with the following keys:
         -> status: 1 if more than 1 valve is active
         -> error: 1 if error in valves is present
         """
-        return parse_statusword(self._read_status_word())
+        return parse_statusword(self._read_status_word().to_list())
 
     def wait_for_readiness(self, timeout=10.0):
         """
@@ -508,14 +401,7 @@ class vaemDriver:
         """
         If any error occurs in valve opening, must be cleared with this opperation.
         """
-        data = {}
-        data["access"] = VaemAccess.Write.value
-        data["dataType"] = VaemDataType.UINT16.value
-        data["paramIndex"] = VaemIndex.ControlWord.value
-        data["paramSubIndex"] = 0
-        data["errorRet"] = 0
-        data["transferValue"] = VaemControlWords.ResetErrors.value
-        register = _construct_registers(data)
-        resp = self._transfer(register)
-
-        return _deconstruct_registers(resp)
+        data = create_controlword_registers(
+            VaemAccess.Write.value, VaemControlWords.ResetErrors.value
+        )
+        return self._transfer_vaem_registers(data)
