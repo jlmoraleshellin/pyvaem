@@ -1,76 +1,93 @@
-# 🐍 Python Driver
-<img src="https://www.python.org/static/community_logos/python-logo-master-v3-TM-flattened.png" alt="alt text" width="600" height="250">
+# 🐍 PyVaem
 
-![GitHub last commit](https://img.shields.io/github/last-commit/jhynes94/vaem)
+## 📋 Overview
 
-## 💬 Language
-* Python 3.7
+This is an improved and maintained Python driver for Festo VAEM (Valve control module) devices. This project is based on the original VAEM driver but has been significantly refactored, tested, and enhanced for better reliability and usability.
 
-## 📚 Required Libraries
-* <img src="http://domoticx.com/wp-content/uploads/2017/09/modbus-logo-300x96.png" alt="alt text" width="60" height="30">[ PyModbus v2.5.2](http://riptideio.github.io/pymodbus/)
-* <img src="https://pythonhosted.org/pyserial/_static/pyserial.png" alt="alt text" width="60" height="30">[ PySerial v3.5](https://pythonhosted.org/pyserial/)
+## 🛠️ Requirements
 
-## Instalation
+- **Python**: 3.8 or higher
 
-**The module uses setuptools in order to install and configure all packages.**
+### 📚 Core Dependencies
+- [PyModbus v3.0+](https://pymodbus.readthedocs.io/)
 
-1. (Optional) Create a virtual environment and activate it
-    * python -m venv env
-    * (windows) /env/Scripts/activate.bat
-2. Install everything using setup.py
-    * pip install -e .
-3. Use within virtual enviroment
+## 🚀 Installation
 
-**If you choose not to use virtual enviroment, you might need to edit the import statements of the module!**
+### Option 1: From Source
+```bash
+# Clone the repository
+git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
+cd YOUR_REPO_NAME
 
-    
+# Create virtual environment (recommended)
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
+# Install in development mode
+pip install -e .
+```
 
-## 📜 PGVA Arguments
-* ```string ip``` - host IP for tcp/ip (ex. 192.168.0.XXX)
-* ```int port``` - TCP port number for tcp/ip (ex. 502)
-* ```int slave_id``` - unit or slave Modbus identification number for the device (ex. 0)
+## 📖 Quick Start
 
-## Example Code
-### 🚀 Start
-* ```vaemConfig``` holds the arguments for the new ```VAEM``` object
-* Creates a new ```VAEM``` driver object (```ip```, ```port```, ```slave_id```) and attempts to connect
-* Initializes the device and configures the valves using the given array of opening times
+### Basic Usage
+In progress...
 
- ![image](https://user-images.githubusercontent.com/71296226/135302227-2082d959-7de2-4e2c-a6f4-445fbf3f5735.png)
+## 🎯 API Reference
 
-### ♾️ Loop
-* While loop that repeatedly opens and closes valve 1
-* Reads the status of the ```VAEM``` after opening the valve
-* Waits one second between opening and closing, vice versa
-* Checks if there is an error and clears it if true
+### Core Methods
+- `configure_valves(valve_config: dict)` - Set valve parameters
+- `save_settings()` - Save current configuration to device
+- `select_valves(valve_list: list)` - Select valves to open
+- `select_valves(valve_list: list)` - Select valves to open
+- `open_valve()` - Open selected valve
+- `close_valve()` - Close all valves
+- `clear_error()` - Clear any device errors
 
-![image](https://user-images.githubusercontent.com/71296226/135303149-dec628d6-3553-4b4d-8874-b1a7738d20ff.png)
+### Configuration Options
+```python
+config = VaemConfig(
+    ip='192.168.1.100',        # Device IP address
+    port=502,                  # Modbus TCP port
+    slave_id=1,                # Modbus slave ID
+)
+```
 
-### 🚧 Constructor
-* Sets the ```TcpClient``` with the given host ip and port from ```config```
-* Attempts three times to connect to the client
-* Throws an error if the code was not able to connect to the device
+## 📝 Examples
 
-![image](https://user-images.githubusercontent.com/71296226/135303620-42ddb615-ba3f-4cf3-ac42-1c1cdb01bf47.png)
+See `exampleVaem.py` for a usage example.
 
-### ✔️ Initialization
-* Sets the operating mode to ```OpMode1``` using a write operation
-* Clears any errors on the device using a write operation
+## 🤝 Contributing
 
-(```constructFrame``` builds the message to be sent to the device and ```transfer``` sends it)
+Contributions are welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Add tests for new functionality
+4. Ensure all tests pass
+5. Submit a pull request
 
-![image](https://user-images.githubusercontent.com/71296226/135303699-c066e66c-01a1-43dc-a231-89893b727951.png)
+## 📄 License
 
-## 🧑‍💻Interface
-- [x] configureValves(valveOpeningTimes: dict);
-- [X] openValve(self);
-- [x] closeValve(self);
-- [ ] readStatus();
-- [ ] clearError();
-- [ ] saveSettings();
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
-## Author
-|Name          | Email                     | GitHub         |
-| ------------ | ------------------------- | -------------- |
-| Milen Kolev  | milen.kolev@festo.com     | @MKollev       |
+## 🙏 Attribution
+
+This project is based on the original VAEM driver developed by Milen Kolev (milen.kolev@festo.com) and the Festo team. The original project provided the foundation for this improved implementation.
+
+**Original Repository**: [Link to original if still available](https://github.com/Festo-se/VAEM)
+
+## 📧 Contact
+
+For questions, issues, or contributions:
+- **Email**: [jlmoraleshellin@gmail.com]
+
+## 🔄 Changelog
+
+### Version 1.0.0 (Current)
+- Reqrite with improved architecture
+- Improved error handling and logging
+- More...
+
+### Version 0.0.2 (Original)
+- Basic VAEM control functionality
+- Modbus TCP communication
+- Simple valve operations
