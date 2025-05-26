@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyvaem"
-version = "0.0.0"
+version = "1.0.0"
 description = "Python API for VAEM Festo valve control module"
 authors = ["Jose <jlmoraleshellin@gmail.com>"]
 license = "Apache-2.0"
