@@ -86,7 +86,7 @@ class VaemOperatingMode(IntEnum):
     OpMode3 = 0x02
 
 
-def get_status(statusWord):
+def parse_statusword(statusWord):
     status = {}
     status["Status"] = statusWord & 0x01
     status["Error"] = (statusWord & 0x08) >> 3

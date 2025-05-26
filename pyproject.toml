@@ -9,7 +9,7 @@ repository = "https://github.com/jlmoraleshellin/pyvaem"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<4.0"
-pymodbus = "^2.5.0"
+pymodbus = "^3.0.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
