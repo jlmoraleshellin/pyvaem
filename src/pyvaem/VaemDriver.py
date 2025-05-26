@@ -13,8 +13,8 @@ import time
 
 from pymodbus.client.sync import ModbusTcpClient as TcpClient
 
-from vaem.dataTypes import VaemConfig
-from vaem.vaemHelper import *
+from pyvaem.dataTypes import VaemConfig
+from pyvaem.vaemHelper import *
 
 readParam = {
     "address": 0,

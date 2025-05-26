@@ -1,7 +1,7 @@
 import logging
 
-from vaem.VaemDriver import vaemDriver
-from vaem.dataTypes import VaemConfig
+from pyvaem.VaemDriver import vaemDriver
+from pyvaem.dataTypes import VaemConfig
 
 
 if __name__ == "__main__":
