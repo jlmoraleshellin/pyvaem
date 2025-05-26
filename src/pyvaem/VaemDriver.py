@@ -2,7 +2,7 @@ import logging
 import struct
 import time
 
-from pymodbus.client.sync import ModbusTcpClient as TcpClient
+from pymodbus.client import ModbusTcpClient as TcpClient
 
 from pyvaem.dataTypes import VaemConfig
 from pyvaem.vaemHelper import *
