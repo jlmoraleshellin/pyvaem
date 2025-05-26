@@ -1,17 +1,74 @@
 from enum import IntEnum, Enum
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 import struct
 
 
-valveSettings = {
-    "NominalVoltage": 24000,
-    "ResponseTime": 500,
-    "TimeDelay": 0,
-    "PickUpTime": 125,
-    "InrushCurrent": 300,
-    "HitNHold": 100,
-    "HoldingCurrent": 100,
+class VaemIndex(IntEnum):
+    ControlWord = 0x01
+    StatusWord = 0x02
+    NominalVoltage = 0x04
+    InrushCurrent = 0x05
+    HoldingCurrent = 0x06
+    ResponseTime = 0x07
+    PickUpTime = 0x08
+    OperatingMode = 0x09
+    SaveParameters = 0x11
+    SelectValve = 0x13
+    TimeDelay = 0x16
+    HitNHold = 0x2E
+
+
+VaemRanges: dict[str, tuple] = {
+    "NominalVoltage": (8000, 24000 + 1),
+    "InrushCurrent": (20, 1000 + 1),
+    "HoldingCurrent": (20, 400 + 1),
+    "ResponseTime": (1, (2**32), -1 + 1),
+    "PickUpTime": (1, 500 + 1),
+    "TimeDelay": (0, (2**32), -1 + 1),
+    "HitNHold": (0, 1000 + 1),
+    "SelectValve": (0, 255 + 1),
 }
+
+
+@dataclass(frozen=True)
+class ValveSettings:
+    NominalVoltage: int = 24000
+    ResponseTime: int = 500
+    TimeDelay: int = 0
+    PickUpTime: int = 125
+    InrushCurrent: int = 300
+    HitNHold: int = 100
+    HoldingCurrent: int = 100
+
+    # Mapping from field names to VaemIndex enums
+    _FIELD_TO_ENUM = {
+        "NominalVoltage": VaemIndex.NominalVoltage,
+        "ResponseTime": VaemIndex.ResponseTime,
+        "TimeDelay": VaemIndex.TimeDelay,
+        "PickUpTime": VaemIndex.PickUpTime,
+        "InrushCurrent": VaemIndex.InrushCurrent,
+        "HitNHold": VaemIndex.HitNHold,
+        "HoldingCurrent": VaemIndex.HoldingCurrent,
+    }
+
+    @classmethod
+    def from_dict(cls, data: dict = None) -> "ValveSettings":
+        """Create ValveSettings from dictionary with defaults for missing values."""
+        if not data:
+            return cls()
+        return cls(**data)
+
+    def to_dict(self) -> dict:
+        return self.__dict__
+
+    def to_enum_dict(self) -> dict[VaemIndex, int]:
+        """Convert to dict with VaemIndex keys."""
+        return {
+            self._FIELD_TO_ENUM[field_name]: value
+            for field_name, value in self.__dict__.items()
+            if field_name in self._FIELD_TO_ENUM
+        }
+
 
 vaemValveIndex = {
     1: 0x01,
@@ -114,46 +171,6 @@ class VaemDataType(IntEnum):
     UINT64 = 4
 
 
-class VaemIndex(IntEnum):
-    ControlWord = 0x01
-    StatusWord = 0x02
-    NominalVoltage = 0x04
-    InrushCurrent = 0x05
-    HoldingCurrent = 0x06
-    ResponseTime = 0x07
-    PickUpTime = 0x08
-    OperatingMode = 0x09
-    SaveParameters = 0x11
-    SelectValve = 0x13
-    TimeDelay = 0x16
-    HitNHold = 0x2E
-
-
-"""
-class VaemValveIndex(IntEnum):
-    Valve1 = 0x01
-    Valve2 = 0x02
-    Valve3 = 0x04
-    Valve4 = 0x08
-    Valve5 = 0x10
-    Valve6 = 0x20
-    Valve7 = 0x40
-    Valve8 = 0x80
-    AllValves = 255
-"""
-
-
-class VaemRanges(Enum):
-    NominalVoltage = (8000, 24000 + 1)
-    InrushCurrent = (20, 1000 + 1)
-    HoldingCurrent = (20, 400 + 1)
-    ResponseTime = (1, (2**32) - 1 + 1)
-    PickUpTime = (1, 500 + 1)
-    TimeDelay = (0, (2**32) - 1 + 1)
-    HitNHold = (0, 1000 + 1)
-    SelectValve = (0, 255 + 1)
-
-
 class VaemControlWords(IntEnum):
     StartValves = 0x01
     StopValves = 0x04
@@ -196,15 +213,15 @@ SETTING_DATA_TYPES = {
 
 
 def create_setting_registers(
-    param: VaemIndex, valve: int, operation: int, **settings
+    setting: VaemIndex, valve: int, operation: int, value: int = 0
 ) -> VaemRegisters:
     return VaemRegisters(
         access=operation,
-        dataType=SETTING_DATA_TYPES[param].value,
-        paramIndex=param.value,
+        dataType=SETTING_DATA_TYPES[setting].value,
+        paramIndex=setting.value,
         paramSubIndex=valve,
         errorRet=0,
-        transferValue=settings.get(param.name, 0),
+        transferValue=value,
     )
 
 

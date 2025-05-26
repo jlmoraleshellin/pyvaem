@@ -9,9 +9,10 @@ from pyvaem.vaemHelper import (
     VaemControlWords,
     VaemDataType,
     VaemIndex,
-    VaemRanges,
     VaemOperatingMode,
     VaemRegisters,
+    ValveSettings,
+    VaemRanges,
     create_setting_registers,
     create_select_valve_registers,
     create_controlword_registers,
@@ -208,98 +209,83 @@ class vaemDriver:
         data = create_select_valve_registers(VaemAccess.Write.value, decimal_code)
         return self._transfer_vaem_registers(data)
 
-    # TODO refactor this method to handle errors individually
-    def configure_valves(self, valve_id, settings: dict[VaemIndex, int]):
+    @handle_error_response
+    def set_valve_setting(self, valve_id: int, setting: VaemIndex, value: int):
+        valid_range = VaemRanges.get(setting.name)
+        if valid_range is None:
+            self._log.error(f"VaemIndex {setting.name} is not a setting")
+            return
+
+        if value not in range(*valid_range) and valve_id not in range(1, 9):
+            self._log.error(
+                f"{setting.name} must be in range {valid_range[0]} - {valid_range[1] - 1} and valve_id -> 1-8"
+            )
+            return
+
+        data = create_setting_registers(
+            setting,
+            valve_id - 1,
+            VaemAccess.Write.value,
+            int(value),
+        )
+        return self._transfer_vaem_registers(data)
+
+    def set_multiple_valve_settings(
+        self, valve_id, settings: ValveSettings | dict[str, int] = None
+    ):
         """Configure settings for a specific valve. This method allows setting various
         parameters for a given valve.
 
         Args:
-            valve_id: The identifier of the valve to configure
-            settings (dict[VaemIndex, int]): Dictionary mapping valve parameters to their values.
-                Keys are VaemIndex enum members and values are the parameter settings.
-
-        Examples:
-            >>> driver.configure_valves(1, {VaemIndex.ResponseTime: 100, VaemIndex.InrushCurrent: 50})
+            valve_id: Valve ID (1-8)
+            settings: ValveSettings object, dict of settings, or None for defaults
         """
-        for param, value in settings.items():
-            # Check if parameter is actually a setting
-            if not hasattr(VaemRanges, param.name):
-                raise ValueError(f"VaemIndex {param.name} is not a setting")
+        if valve_id not in range(1, 9):
+            self._log.error("valve_id must be between 1-8")
+            return
 
-            # Check parameter and valve ranges
-            if value in range(
-                *getattr(VaemRanges, param.name).value
-            ) and valve_id in range(1, 9):
-                data = create_setting_registers(
-                    param,
-                    valve_id - 1,  # Valve id starts at 0 for settings
-                    VaemAccess.Write.value,
-                    **{param.name: int(value)},
-                )
-                self._transfer_vaem_registers(data)
-            else:
-                valid_range = getattr(VaemRanges, param.name).value
-                raise ValueError(
-                    f"{param.name} must be in range {valid_range[0]} - {valid_range[1] - 1} and valve_id -> 1-8"
-                )
-
-    @handle_error_response
-    def configure_valve_response_time(self, valve_id: int, opening_time: int):
-        """Set a specific valve's response time (opening time)"""
-        data = {}
-        if (opening_time in range(0, (2**32))) and (valve_id in range(1, 9)):
-            data = create_setting_registers(
-                VaemIndex.ResponseTime,
-                valve_id - 1,  # Valve id starts at 0 for settings
-                VaemAccess.Write.value,
-                **{"ResponseTime": int(opening_time)},
-            )
-            return self._transfer_vaem_registers(data)
+        # Handle different input types
+        if settings is None:
+            valve_settings = ValveSettings()
+        elif isinstance(settings, dict):
+            valve_settings = ValveSettings.from_dict(settings)
+        elif isinstance(settings, ValveSettings):
+            valve_settings = settings
         else:
-            self._log.error("opening time must be in range 0-2000 and valve_id -> 1-8")
-            raise ValueError
+            self._log.error(f"Invalid settings type: {type(settings)}")
+            return
+
+        for setting, value in valve_settings.to_enum_dict().items():
+            self.set_valve_setting(valve_id, setting, value)
 
     @handle_error_response
-    def configure_valve_inrush_current(self, valve_id: int, inrush_current: int):
-        """Set a specific valve's inrush current"""
-        data = {}
-        if (inrush_current in range(20, 1000)) and (valve_id in range(1, 9)):
-            data = create_setting_registers(
-                VaemIndex.InrushCurrent,
-                valve_id - 1,  # Valve id starts at 0 for settings
-                VaemAccess.Write.value,
-                **{"InrushCurrent": int(inrush_current)},
-            )
-            return self._transfer_vaem_registers(data)
-        else:
-            self._log.error(
-                "inrush current must be in range 20-1000 and valve_id -> 1-8"
-            )
-            raise ValueError
-
-    @handle_error_response
-    def read_valve_configuration(self, valve_id, setting: VaemIndex):
-        """Read settings for a specific valve. This method allows reading various
-        parameters for a given valve.
-
-        Args:
-            valve_id: The identifier of the valve to configure
-            settings (VaemIndex): VaemIndex settings to read.
-
-        Examples:
-            driver.read_valve_configuration(1, VaemIndex.ResponseTime)
-        """
+    def read_valve_setting(self, valve_id, setting: VaemIndex):
+        """Read settings for a specific valve."""
         # Check if parameter is actually a setting
-        if not hasattr(VaemRanges, setting.name):
-            raise ValueError(f"VaemIndex {setting.name} is not a setting")
+        if VaemRanges.get(setting.name) is None:
+            self._log.error(f"VaemIndex {setting.name} is not a setting")
+            return
 
         data = create_setting_registers(
             setting,
             valve_id - 1,  # Valve id starts at 0 for settings
             VaemAccess.Read.value,
-            **{setting.name: 0},
         )
         return self._transfer_vaem_registers(data)
+
+    def read_all_valve_settings(self, valve_id: int):
+        """Read all settings for a specific valve and returns them as a ValveSettings object"""
+        if valve_id not in range(1, 9):
+            self._log.error("valve_id must be between 1-8")
+            return
+
+        settings = {}
+        for setting in VaemRanges.keys():
+            value = self.read_valve_setting(valve_id, setting)
+            if value is not None:
+                settings.update(setting, value.transferValue)
+
+        return ValveSettings.from_dict(settings)
 
     @handle_error_response
     def start_valves(self):
