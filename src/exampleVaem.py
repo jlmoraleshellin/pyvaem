@@ -8,12 +8,11 @@ if __name__ == "__main__":
     vaemConfig = VaemConfig("192.168.8.118", 502, 0)
 
     try:
-        vaem = vaemDriver(vaemConfig, logger=logging)
+        vaem = vaemDriver(vaemConfig, logger=logging.Logger("vaem_logger"))
     except Exception as e:
         print(e)
 
     def func():
-        vaem._vaem_init()
         print(vaem.get_status())
         vaem.select_valve(3)
         print(vaem.get_status())
