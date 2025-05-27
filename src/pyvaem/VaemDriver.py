@@ -101,8 +101,8 @@ class vaemDriver:
                 read_address=readParam["address"],
                 read_count=readParam["length"],
                 write_address=writeParam["address"],
-                write_registers=writeData,
-                unit=self._config.slave_id,
+                values=writeData,
+                slave=self._config.slave_id,
             )
             return data.registers
         except Exception as e:
