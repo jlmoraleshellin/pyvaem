@@ -49,7 +49,7 @@ error_codes = {
 
 
 def handle_error_response(func):
-    def wrapper(self: vaemDriver, *args, **kwargs):
+    def wrapper(self: "vaemDriver", *args, **kwargs):
         if not self._vaem_connected:
             self._log.warning("No VAEM Connected")
             return
