@@ -88,12 +88,8 @@ class vaemDriver:
 
         self._log.info(f"Connected to VAEM : {self._config}")
         self._vaem_connected = True
-        self._initialize()
-
-    def _initialize(self):
-        # Set operating mode to API control
         self.set_operating_mode(VaemOperatingMode.OpMode1)
-        self._reset_error()
+        self.clear_error()
 
     def _read_write_registers(self, writeData: list) -> list:
         try:
