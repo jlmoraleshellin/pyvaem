@@ -92,7 +92,7 @@ class vaemDriver:
 
     def _initialize(self):
         # Set operating mode to API control
-        self.set_operating_mode(VaemOperatingMode.OpMode1.value)
+        self.set_operating_mode(VaemOperatingMode.OpMode1)
         self._clear_error()
 
     def _read_write_registers(self, writeData: list) -> list:
