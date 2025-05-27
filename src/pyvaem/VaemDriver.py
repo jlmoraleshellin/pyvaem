@@ -62,7 +62,7 @@ def handle_error_response(func):
         error = result.errorRet
         if error != 0:
             self._log.error(f"{error_codes[error]}")
-            self._clear_error()
+            self.clear_error()
 
         return result
 
@@ -93,7 +93,7 @@ class vaemDriver:
     def _initialize(self):
         # Set operating mode to API control
         self.set_operating_mode(VaemOperatingMode.OpMode1)
-        self._clear_error()
+        self._reset_error()
 
     def _read_write_registers(self, writeData: list) -> list:
         try:
@@ -307,25 +307,30 @@ class vaemDriver:
 
     ### VALVE OPERATIONS ###
     @handle_error_response
-    def _start_valves(self):
-        """
-        Start all valves that are selected
-        """
+    def open_valves(self):
+        """Start all valves that are selected"""
+        self._reset_control_word()
+
         data = create_controlword_registers(
             VaemAccess.Write.value, VaemControlWords.StartValves.value
         )
         return self._transfer_vaem_registers(data)
 
     @handle_error_response
-    def _stop_valves(self):
+    def close_valves(self):
+        """Close all valves"""
+        self._reset_control_word()
+
         data = create_controlword_registers(
             VaemAccess.Write.value, VaemControlWords.StopValves.value
         )
         return self._transfer_vaem_registers(data)
 
     @handle_error_response
-    def _clear_error(self):
+    def clear_error(self):
         """If any error occurs in valve opening, must be cleared with this opperation."""
+        self._reset_control_word()
+
         data = create_controlword_registers(
             VaemAccess.Write.value, VaemControlWords.ResetErrors.value
         )
@@ -336,17 +341,6 @@ class vaemDriver:
         """Reset control word"""
         data = create_controlword_registers(VaemAccess.Write.value, 0)
         return self._transfer_vaem_registers(data)
-
-    def open_valves(self):
-        """Start all valves that are selected"""
-        self._start_valves()
-        time.sleep(0.1)
-        self._reset_control_word()
-
-    def close_valves(self):
-        self._stop_valves()
-        time.sleep(0.1)
-        self._reset_control_word()
 
     def read_valves_state(self):
         if not self._vaem_connected:
