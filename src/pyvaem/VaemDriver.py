@@ -201,6 +201,18 @@ class vaemDriver:
         data = create_select_valve_registers(VaemAccess.Write.value, decimal_code)
         return self._transfer_vaem_registers(data)
 
+    @handle_error_response
+    def select_all_valves(self):
+        data = create_select_valve_registers(
+            VaemAccess.Write.value, vaemValveIndex["AllValves"]
+        )
+        return self._transfer_vaem_registers(data)
+
+    @handle_error_response
+    def deselect_all_valves(self):
+        data = create_select_valve_registers(VaemAccess.Write.value, 0)
+        return self._transfer_vaem_registers(data)
+
     ### VALVE SETTINGS OPERATIONS ###
     @handle_error_response
     def set_valve_setting(self, valve_id: int, setting: VaemIndex, value: int):
@@ -303,14 +315,14 @@ class vaemDriver:
             VaemAccess.Write.value, VaemControlWords.StartValves.value
         )
         return self._transfer_vaem_registers(data)
-    
+
     @handle_error_response
     def _stop_valves(self):
         data = create_controlword_registers(
             VaemAccess.Write.value, VaemControlWords.StopValves.value
         )
         return self._transfer_vaem_registers(data)
-    
+
     @handle_error_response
     def _clear_error(self):
         """If any error occurs in valve opening, must be cleared with this opperation."""
@@ -324,8 +336,8 @@ class vaemDriver:
         """Reset control word"""
         data = create_controlword_registers(VaemAccess.Write.value, 0)
         return self._transfer_vaem_registers(data)
-    
-    def open_valve(self):
+
+    def open_valves(self):
         """Start all valves that are selected"""
         self._start_valves()
         time.sleep(0.1)
