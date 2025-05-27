@@ -1,5 +1,5 @@
-from enum import IntEnum, Enum
-from dataclasses import dataclass, fields
+from enum import IntEnum
+from dataclasses import dataclass
 import struct
 
 
