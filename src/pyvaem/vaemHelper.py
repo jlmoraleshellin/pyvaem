@@ -12,7 +12,7 @@ class VaemIndex(IntEnum):
     ResponseTime = 0x07
     PickUpTime = 0x08
     OperatingMode = 0x09
-    SaveParameters = 0x11
+    SaveParameters = 0x0B
     SelectValve = 0x13
     TimeDelay = 0x16
     HitNHold = 0x2E
@@ -22,9 +22,9 @@ VaemRanges: dict[str, tuple] = {
     "NominalVoltage": (8000, 24000 + 1),
     "InrushCurrent": (20, 1000 + 1),
     "HoldingCurrent": (20, 400 + 1),
-    "ResponseTime": (1, (2**32), -1 + 1),
+    "ResponseTime": (1, (2**32) -1 + 1),
     "PickUpTime": (1, 500 + 1),
-    "TimeDelay": (0, (2**32), -1 + 1),
+    "TimeDelay": (0, (2**32) -1 + 1),
     "HitNHold": (0, 1000 + 1),
     "SelectValve": (0, 255 + 1),
 }
@@ -205,7 +205,7 @@ SETTING_DATA_TYPES = {
     VaemIndex.ResponseTime: VaemDataType.UINT32,
     VaemIndex.InrushCurrent: VaemDataType.UINT16,
     VaemIndex.HoldingCurrent: VaemDataType.UINT16,
-    VaemIndex.PickUpTime: VaemDataType.UINT16,
+    VaemIndex.PickUpTime: VaemDataType.UINT32, # Documentation says UINT16 but it requires UINT32
     VaemIndex.TimeDelay: VaemDataType.UINT32,
     VaemIndex.HitNHold: VaemDataType.UINT32,
     VaemIndex.SelectValve: VaemDataType.UINT8,
