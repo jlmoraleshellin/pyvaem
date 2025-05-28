@@ -10,26 +10,16 @@ from pyvaem.vaemHelper import (
     VaemDataType,
     VaemIndex,
     VaemOperatingMode,
-    VaemParameters,
-    VaemRanges,
     VaemRegisters,
     ValveSettings,
     create_controlword_registers,
     create_select_valve_registers,
     create_setting_registers,
     parse_statusword,
-    vaemValveIndex,
+    vaem_parameters,
+    vaem_ranges,
+    valve_indexes,
 )
-
-readParam = {
-    "address": 0,
-    "length": 0x07,
-}
-
-writeParam = {
-    "address": 0,
-    "length": 0x07,
-}
 
 error_msgs: dict[int, str] = {
     0: "Ready for operation, no error",
@@ -70,9 +60,9 @@ R = TypeVar("R", bound=VaemRegisters)
 
 
 def clear_and_raise_error(
-    func: Callable[Concatenate["vaemDriver", P], R],
-) -> Callable[Concatenate["vaemDriver", P], R]:
-    def wrapper(self: "vaemDriver", *args, **kwargs):
+    func: Callable[Concatenate["VaemDriver", P], R],
+) -> Callable[Concatenate["VaemDriver", P], R]:
+    def wrapper(self: "VaemDriver", *args, **kwargs):
         result = func(self, *args, **kwargs)
 
         def raise_error(error_code: int):
@@ -90,7 +80,7 @@ def clear_and_raise_error(
     return wrapper
 
 
-class vaemDriver:
+class VaemDriver:
     def __init__(self, vaemConfig: VaemConfig, logger=logging.getLogger("vaem")):
         self._config = vaemConfig
         self._log = logger
@@ -112,14 +102,16 @@ class vaemDriver:
         self.clear_error()
 
     def _transfer_vaem_registers(self, vaem_reg: VaemRegisters) -> VaemRegisters:
-        """Helper method to handle the common transfer pattern"""
+        """Method to handle the common transfer pattern"""
 
         def _read_write_registers() -> list:
+            read_param = {"address": 0, "length": 0x07}
+            write_param = {"address": 0, "length": 0x07}
             try:
                 data = self.client.readwrite_registers(
-                    read_address=readParam["address"],
-                    read_count=readParam["length"],
-                    write_address=writeParam["address"],
+                    read_address=read_param["address"],
+                    read_count=read_param["length"],
+                    write_address=write_param["address"],
                     values=vaem_reg.to_list(),
                     slave=self._config.slave_id,
                 )
@@ -163,7 +155,7 @@ class vaemDriver:
 
         # select new valve
         data = create_select_valve_registers(
-            VaemAccess.Write.value, vaemValveIndex[valve_id] | resp.transferValue
+            VaemAccess.Write.value, valve_indexes[valve_id] | resp.transferValue
         )
         return self._transfer_vaem_registers(data)
 
@@ -185,7 +177,7 @@ class vaemDriver:
 
         # deselect new valve
         data = create_select_valve_registers(
-            VaemAccess.Write.value, resp.transferValue & (~(vaemValveIndex[valve_id]))
+            VaemAccess.Write.value, resp.transferValue & (~(valve_indexes[valve_id]))
         )
         return self._transfer_vaem_registers(data)
 
@@ -212,7 +204,7 @@ class vaemDriver:
     @clear_and_raise_error
     def select_all_valves(self) -> VaemRegisters:
         data = create_select_valve_registers(
-            VaemAccess.Write.value, vaemValveIndex["AllValves"]
+            VaemAccess.Write.value, valve_indexes["AllValves"]
         )
         return self._transfer_vaem_registers(data)
 
@@ -226,7 +218,7 @@ class vaemDriver:
     def set_valve_setting(
         self, valve_id: int, setting: VaemIndex, value: int
     ) -> VaemRegisters:
-        valid_range = VaemRanges.get(setting.name)
+        valid_range = vaem_ranges.get(setting.name)
         if valid_range is None:
             raise ValueError(f"VaemIndex {setting.name} is not a setting")
 
@@ -287,7 +279,7 @@ class vaemDriver:
     def read_valve_setting(self, valve_id, setting: VaemIndex) -> VaemRegisters:
         """Read settings for a specific valve."""
         # Check if parameter is actually a setting
-        if setting.name not in VaemParameters:
+        if setting.name not in vaem_parameters:
             raise ValueError(f"VaemIndex {setting.name} is not a setting")
 
         data = create_setting_registers(
@@ -303,7 +295,7 @@ class vaemDriver:
             raise ValueError("Valve_id must be between 1-8")
 
         settings: dict[str, int] = {}
-        for setting in VaemParameters:
+        for setting in vaem_parameters:
             value = self.read_valve_setting(valve_id, getattr(VaemIndex, setting))
             if value is not None:
                 settings.update({setting: value.transferValue})

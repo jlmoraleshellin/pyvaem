@@ -1,6 +1,6 @@
 import logging
 import time
-from pyvaem.VaemDriver import vaemDriver
+from pyvaem.VaemDriver import VaemDriver
 from pyvaem.vaemHelper import ValveSettings
 from pyvaem.dataTypes import VaemConfig
 
@@ -9,7 +9,7 @@ if __name__ == "__main__":
     vaemConfig = VaemConfig("192.168.8.118", 502, 0)
 
     try:
-        vaem = vaemDriver(vaemConfig, logger=logging.Logger("vaem_logger"))
+        vaem = VaemDriver(vaemConfig, logger=logging.Logger("vaem_logger"))
     except Exception as e:
         print(e)
 

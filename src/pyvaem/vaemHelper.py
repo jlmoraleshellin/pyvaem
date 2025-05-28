@@ -1,6 +1,6 @@
-from enum import IntEnum
-from dataclasses import dataclass
 import struct
+from dataclasses import dataclass
+from enum import IntEnum
 
 
 class VaemIndex(IntEnum):
@@ -18,7 +18,7 @@ class VaemIndex(IntEnum):
     HitNHold = 0x2E
 
 
-VaemParameters: list[str] = [
+vaem_parameters: list[str] = [
     "NominalVoltage",
     "InrushCurrent",
     "HoldingCurrent",
@@ -30,7 +30,7 @@ VaemParameters: list[str] = [
 ]
 
 
-VaemRanges: dict[str, tuple] = {
+vaem_ranges: dict[str, tuple] = {
     "NominalVoltage": (8000, 24000 + 1),
     "InrushCurrent": (20, 1000 + 1),
     "HoldingCurrent": (20, 400 + 1),
@@ -82,7 +82,7 @@ class ValveSettings:
         }
 
 
-vaemValveIndex = {
+valve_indexes = {
     1: 0x01,
     2: 0x02,
     3: 0x04,
