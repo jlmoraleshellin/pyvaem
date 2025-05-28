@@ -42,46 +42,6 @@ vaem_ranges: dict[str, tuple] = {
 }
 
 
-@dataclass(frozen=True)
-class ValveSettings:
-    NominalVoltage: int = 24000
-    ResponseTime: int = 500
-    TimeDelay: int = 0
-    PickUpTime: int = 125
-    InrushCurrent: int = 300
-    HitNHold: int = 100
-    HoldingCurrent: int = 100
-
-    # Mapping from field names to VaemIndex enums
-    _FIELD_TO_ENUM = {
-        "NominalVoltage": VaemIndex.NominalVoltage,
-        "ResponseTime": VaemIndex.ResponseTime,
-        "TimeDelay": VaemIndex.TimeDelay,
-        "PickUpTime": VaemIndex.PickUpTime,
-        "InrushCurrent": VaemIndex.InrushCurrent,
-        "HitNHold": VaemIndex.HitNHold,
-        "HoldingCurrent": VaemIndex.HoldingCurrent,
-    }
-
-    @classmethod
-    def from_dict(cls, data: dict | None = None) -> "ValveSettings":
-        """Create ValveSettings from dictionary with defaults for missing values."""
-        if not data:
-            return cls()
-        return cls(**data)
-
-    def to_dict(self) -> dict:
-        return self.__dict__
-
-    def to_enum_dict(self) -> dict[VaemIndex, int]:
-        """Convert to dict with VaemIndex keys."""
-        return {
-            self._FIELD_TO_ENUM[field_name]: value
-            for field_name, value in self.__dict__.items()
-            if field_name in self._FIELD_TO_ENUM
-        }
-
-
 valve_indexes = {
     1: 0x01,
     2: 0x02,
@@ -236,3 +196,37 @@ def create_controlword_registers(operation: int, control_word: int) -> VaemRegis
         errorRet=0,
         transferValue=control_word,
     )
+
+
+error_msgs: dict[int, str] = {
+    0: "Ready for operation, no error",
+    34: "Invalid index",
+    35: "Invalid subindex",
+    36: "Read request cannot be processed",
+    37: "Write request cannot be processed",
+    41: "Specified value falls below the minimum value",
+    42: "The specified value exceeds the maximum value",
+    43: "Incorrect transfer value",
+    44: "Data type incorrect",
+    93: "General syntax error",
+    94: "Syntax error index (variable x)",
+    95: "Syntax error subindex (variable y)",
+    96: "Syntax error value",
+    97: "Command execution aborted",
+}
+
+error_types: dict[int, type[Exception]] = {
+    34: IndexError,
+    35: IndexError,
+    36: PermissionError,
+    37: PermissionError,
+    41: ValueError,
+    42: ValueError,
+    43: ValueError,
+    44: TypeError,
+    93: ValueError,
+    94: ValueError,
+    95: ValueError,
+    96: ValueError,
+    97: RuntimeError,
+}

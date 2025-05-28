@@ -3,57 +3,24 @@ from typing import Callable, Concatenate, ParamSpec, TypeVar
 
 from pymodbus.client import ModbusTcpClient as TcpClient
 
-from pyvaem.dataTypes import VaemConfig
-from pyvaem.vaemHelper import (
+from pyvaem.config import VaemConfig, ValveSettings
+from pyvaem.utils import (
     VaemAccess,
     VaemControlWords,
     VaemDataType,
     VaemIndex,
     VaemOperatingMode,
     VaemRegisters,
-    ValveSettings,
     create_controlword_registers,
     create_select_valve_registers,
     create_setting_registers,
+    error_msgs,
+    error_types,
     parse_statusword,
     vaem_parameters,
     vaem_ranges,
     valve_indexes,
 )
-
-error_msgs: dict[int, str] = {
-    0: "Ready for operation, no error",
-    34: "Invalid index",
-    35: "Invalid subindex",
-    36: "Read request cannot be processed",
-    37: "Write request cannot be processed",
-    41: "Specified value falls below the minimum value",
-    42: "The specified value exceeds the maximum value",
-    43: "Incorrect transfer value",
-    44: "Data type incorrect",
-    93: "General syntax error",
-    94: "Syntax error index (variable x)",
-    95: "Syntax error subindex (variable y)",
-    96: "Syntax error value",
-    97: "Command execution aborted",
-}
-
-error_types: dict[int, type[Exception]] = {
-    34: IndexError,
-    35: IndexError,
-    36: PermissionError,
-    37: PermissionError,
-    41: ValueError,
-    42: ValueError,
-    43: ValueError,
-    44: TypeError,
-    93: ValueError,
-    94: ValueError,
-    95: ValueError,
-    96: ValueError,
-    97: RuntimeError,
-}
-
 
 P = ParamSpec("P")
 R = TypeVar("R", bound=VaemRegisters)
@@ -215,7 +182,7 @@ class VaemDriver:
 
     ### VALVE SETTINGS OPERATIONS ###
     @clear_and_raise_error
-    def set_valve_setting(
+    def _set_valve_setting(
         self, valve_id: int, setting: VaemIndex, value: int
     ) -> VaemRegisters:
         valid_range = vaem_ranges.get(setting.name)
@@ -235,7 +202,7 @@ class VaemDriver:
         )
         return self._transfer_vaem_registers(data)
 
-    def set_multiple_valve_settings(
+    def set_valve_settings(
         self, valve_id, settings: ValveSettings | dict[str, int] | None
     ):
         """Configure settings for a specific valve. This method allows setting various
@@ -260,7 +227,7 @@ class VaemDriver:
             return
 
         for setting, value in valve_settings.to_enum_dict().items():
-            self.set_valve_setting(valve_id, setting, value)
+            self._set_valve_setting(valve_id, setting, value)
 
     @clear_and_raise_error
     def save_settings(self) -> VaemRegisters:
@@ -276,7 +243,7 @@ class VaemDriver:
         return self._transfer_vaem_registers(data)
 
     @clear_and_raise_error
-    def read_valve_setting(self, valve_id, setting: VaemIndex) -> VaemRegisters:
+    def _read_valve_setting(self, valve_id, setting: VaemIndex) -> VaemRegisters:
         """Read settings for a specific valve."""
         # Check if parameter is actually a setting
         if setting.name not in vaem_parameters:
@@ -289,14 +256,14 @@ class VaemDriver:
         )
         return self._transfer_vaem_registers(data)
 
-    def read_all_valve_settings(self, valve_id: int):
+    def read_valve_settings(self, valve_id: int):
         """Read all settings for a specific valve and returns them as a ValveSettings object"""
         if valve_id not in range(1, 9):
             raise ValueError("Valve_id must be between 1-8")
 
         settings: dict[str, int] = {}
         for setting in vaem_parameters:
-            value = self.read_valve_setting(valve_id, getattr(VaemIndex, setting))
+            value = self._read_valve_setting(valve_id, getattr(VaemIndex, setting))
             if value is not None:
                 settings.update({setting: value.transferValue})
 
