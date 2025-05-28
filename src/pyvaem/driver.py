@@ -14,45 +14,13 @@ from pyvaem.utils import (
     create_controlword_registers,
     create_select_valve_registers,
     create_setting_registers,
+    error_msgs,
+    error_types,
     parse_statusword,
     vaem_parameters,
     vaem_ranges,
     valve_indexes,
 )
-
-error_msgs: dict[int, str] = {
-    0: "Ready for operation, no error",
-    34: "Invalid index",
-    35: "Invalid subindex",
-    36: "Read request cannot be processed",
-    37: "Write request cannot be processed",
-    41: "Specified value falls below the minimum value",
-    42: "The specified value exceeds the maximum value",
-    43: "Incorrect transfer value",
-    44: "Data type incorrect",
-    93: "General syntax error",
-    94: "Syntax error index (variable x)",
-    95: "Syntax error subindex (variable y)",
-    96: "Syntax error value",
-    97: "Command execution aborted",
-}
-
-error_types: dict[int, type[Exception]] = {
-    34: IndexError,
-    35: IndexError,
-    36: PermissionError,
-    37: PermissionError,
-    41: ValueError,
-    42: ValueError,
-    43: ValueError,
-    44: TypeError,
-    93: ValueError,
-    94: ValueError,
-    95: ValueError,
-    96: ValueError,
-    97: RuntimeError,
-}
-
 
 P = ParamSpec("P")
 R = TypeVar("R", bound=VaemRegisters)
