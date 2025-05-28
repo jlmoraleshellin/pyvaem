@@ -314,7 +314,7 @@ class VaemDriver:
         def convert_to_reverse_binary_list():
             """See documentation pdf on how to open multiple valves."""
             binary_string = format(resp.transferValue, "08b")
-            return reversed(int(bit) for bit in binary_string)
+            return reversed(tuple(int(bit) for bit in binary_string))
 
         return tuple(convert_to_reverse_binary_list())
 
