@@ -113,27 +113,21 @@ class VaemRegisters:
             )
         return _deconstruct_registers(registers)
 
-    def to_dict(self) -> dict:
-        """Converts the VaemRegisters object to a dictionary."""
-        return self.__dict__
-
     def to_list(self) -> list[int]:
         """Converts the VaemRegisters object to a list of integers."""
         return _construct_registers(self)
 
 
 def _construct_registers(vaem_reg: VaemRegisters) -> list[int]:
-    data = vaem_reg.to_dict()
     tmp = struct.pack(
         ">BBHBBQ",
-        data["access"],
-        data["dataType"],
-        data["paramIndex"],
-        data["paramSubIndex"],
-        data["errorRet"],
-        data["transferValue"],
+        vaem_reg.access,
+        vaem_reg.dataType,
+        vaem_reg.paramIndex,
+        vaem_reg.paramSubIndex,
+        vaem_reg.errorRet,
+        vaem_reg.transferValue,
     )
-
     return [(tmp[i] << 8) + tmp[i + 1] for i in range(0, len(tmp) - 1, 2)]
 
 
