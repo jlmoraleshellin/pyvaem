@@ -1,2 +1,2 @@
-from .VaemDriver import vaemDriver
+from .VaemDriver import VaemDriver
 from .dataTypes import VaemConfig

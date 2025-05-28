@@ -1,5 +1,5 @@
 import logging
-import time
+from typing import Callable, Concatenate, ParamSpec, TypeVar
 
 from pymodbus.client import ModbusTcpClient as TcpClient
 
@@ -12,25 +12,16 @@ from pyvaem.vaemHelper import (
     VaemOperatingMode,
     VaemRegisters,
     ValveSettings,
-    VaemRanges,
-    create_setting_registers,
-    create_select_valve_registers,
     create_controlword_registers,
+    create_select_valve_registers,
+    create_setting_registers,
     parse_statusword,
-    vaemValveIndex,
+    vaem_parameters,
+    vaem_ranges,
+    valve_indexes,
 )
 
-readParam = {
-    "address": 0,
-    "length": 0x07,
-}
-
-writeParam = {
-    "address": 0,
-    "length": 0x07,
-}
-
-error_codes = {
+error_msgs: dict[int, str] = {
     0: "Ready for operation, no error",
     34: "Invalid index",
     35: "Invalid subindex",
@@ -47,29 +38,49 @@ error_codes = {
     97: "Command execution aborted",
 }
 
+error_types: dict[int, type[Exception]] = {
+    34: IndexError,
+    35: IndexError,
+    36: PermissionError,
+    37: PermissionError,
+    41: ValueError,
+    42: ValueError,
+    43: ValueError,
+    44: TypeError,
+    93: ValueError,
+    94: ValueError,
+    95: ValueError,
+    96: ValueError,
+    97: RuntimeError,
+}
 
-def handle_error_response(func):
-    def wrapper(self: "vaemDriver", *args, **kwargs):
-        if not self._vaem_connected:
-            self._log.warning("No VAEM Connected")
-            return
 
-        result: VaemRegisters = func(self, *args, **kwargs)
+P = ParamSpec("P")
+R = TypeVar("R", bound=VaemRegisters)
 
-        if result is None:
-            return result
+
+def clear_and_raise_error(
+    func: Callable[Concatenate["VaemDriver", P], R],
+) -> Callable[Concatenate["VaemDriver", P], R]:
+    def wrapper(self: "VaemDriver", *args, **kwargs):
+        result = func(self, *args, **kwargs)
+
+        def raise_error(error_code: int):
+            error = error_types[error_code]
+            msg = error_msgs[error_code]
+            raise error(msg)
 
         error = result.errorRet
         if error != 0:
-            self._log.error(f"{error_codes[error]}")
             self.clear_error()
+            raise_error(error)
 
         return result
 
     return wrapper
 
 
-class vaemDriver:
+class VaemDriver:
     def __init__(self, vaemConfig: VaemConfig, logger=logging.getLogger("vaem")):
         self._config = vaemConfig
         self._log = logger
@@ -83,7 +94,6 @@ class vaemDriver:
             else:
                 self._log.warning(f"Failed to connect VAEM. Reconnecting attempt: {_}")
             if _ == 1:
-                self._log.error(f"Could not connect to VAEM: {self._config}")
                 raise ConnectionError(f"Could not connect to VAEM: {self._config}")
 
         self._log.info(f"Connected to VAEM : {self._config}")
@@ -91,27 +101,29 @@ class vaemDriver:
         self.set_operating_mode(VaemOperatingMode.OpMode1)
         self.clear_error()
 
-    def _read_write_registers(self, writeData: list) -> list:
-        try:
-            data = self.client.readwrite_registers(
-                read_address=readParam["address"],
-                read_count=readParam["length"],
-                write_address=writeParam["address"],
-                values=writeData,
-                slave=self._config.slave_id,
-            )
-            return data.registers
-        except Exception as e:
-            self._log.error(f"Something went wrong with read opperation VAEM : {e}")
-            return []
-
     def _transfer_vaem_registers(self, vaem_reg: VaemRegisters) -> VaemRegisters:
-        """Helper method to handle the common transfer pattern"""
-        resp = self._read_write_registers(vaem_reg.to_list())
-        return VaemRegisters.from_list(resp)
+        """Method to handle the common transfer pattern"""
 
-    @handle_error_response
-    def set_operating_mode(self, mode: VaemOperatingMode):
+        def _read_write_registers() -> list:
+            read_param = {"address": 0, "length": 0x07}
+            write_param = {"address": 0, "length": 0x07}
+            try:
+                data = self.client.readwrite_registers(
+                    read_address=read_param["address"],
+                    read_count=read_param["length"],
+                    write_address=write_param["address"],
+                    values=vaem_reg.to_list(),
+                    slave=self._config.slave_id,
+                )
+                return data.registers
+            except Exception as e:
+                self._log.error(f"Something went wrong with read opperation VAEM : {e}")
+                raise
+
+        return VaemRegisters.from_list(_read_write_registers())
+
+    @clear_and_raise_error
+    def set_operating_mode(self, mode: VaemOperatingMode) -> VaemRegisters:
         """Set the operating mode of the VAEM"""
         data = VaemRegisters(
             access=VaemAccess.Write.value,
@@ -124,8 +136,8 @@ class vaemDriver:
         return self._transfer_vaem_registers(data)
 
     ### VALVE SELECTION OPERATIONS ###
-    @handle_error_response
-    def select_valve(self, valve_id: int):
+    @clear_and_raise_error
+    def select_valve(self, valve_id: int) -> VaemRegisters:
         """Selects one valve in the VAEM.
         According to VAEM Logic all selected valves can be opened
 
@@ -135,8 +147,7 @@ class vaemDriver:
             ValueError - raised if the valve id is not supported
         """
         if valve_id in range(1, 9):
-            self._log.error("valve_id must be between 1-8")
-            return
+            raise ValueError("Valve_id must be between 1-8")
 
         # get currently selected valves
         data = create_select_valve_registers(VaemAccess.Read.value, 0)
@@ -144,12 +155,12 @@ class vaemDriver:
 
         # select new valve
         data = create_select_valve_registers(
-            VaemAccess.Write.value, vaemValveIndex[valve_id] | resp.transferValue
+            VaemAccess.Write.value, valve_indexes[valve_id] | resp.transferValue
         )
         return self._transfer_vaem_registers(data)
 
-    @handle_error_response
-    def deselect_valve(self, valve_id: int) -> dict:
+    @clear_and_raise_error
+    def deselect_valve(self, valve_id: int) -> VaemRegisters:
         """Deselects one valve in the VAEM.
 
         @param: valve_id - the id of the valve to select. valid numbers are from 1 to 8
@@ -158,8 +169,7 @@ class vaemDriver:
             ValueError - raised if the valve id is not supported
         """
         if valve_id in range(1, 9):
-            self._log.error("valve_id must be between 1-8")
-            return
+            raise ValueError("Valve_id must be between 1-8")
 
         # get currently selected valves
         data = create_select_valve_registers(VaemAccess.Read.value, 0)
@@ -167,12 +177,12 @@ class vaemDriver:
 
         # deselect new valve
         data = create_select_valve_registers(
-            VaemAccess.Write.value, resp.transferValue & (~(vaemValveIndex[valve_id]))
+            VaemAccess.Write.value, resp.transferValue & (~(valve_indexes[valve_id]))
         )
         return self._transfer_vaem_registers(data)
 
-    @handle_error_response
-    def select_valves(self, states: list[int]):
+    @clear_and_raise_error
+    def select_valves(self, states: list[int]) -> VaemRegisters:
         """Select multiple valves at once by specifying states for all valves.
         See documentation on how to open multiple valves.
 
@@ -180,48 +190,42 @@ class vaemDriver:
          valve_states:
            list of 8 values (0 or 1) representing valve states from left to right (valve 1 is first element, valve 8 is last)
         """
-
-        # Ensure there are 8 states
         if len(states) != 8:
-            self._log.error("Must provide 8 valve states")
-            return
+            raise ValueError("Must provide 8 valve states")
 
-        # Reverse the list to match controller's right-to-left bit ordering
-        reversed_states = states.copy()
-        reversed_states.reverse()
-        # Convert the reversed list to a binary string, then to decimal
-        binary_string = "".join(str(state) for state in reversed_states)
-        decimal_code = int(binary_string, 2)
+        def convert_to_binary_string():
+            reversed_states = reversed(states)
+            return "".join(str(state) for state in reversed_states)
 
-        # Select valves by directly writing the binary pattern
+        decimal_code = int(convert_to_binary_string(), 2)
         data = create_select_valve_registers(VaemAccess.Write.value, decimal_code)
         return self._transfer_vaem_registers(data)
 
-    @handle_error_response
-    def select_all_valves(self):
+    @clear_and_raise_error
+    def select_all_valves(self) -> VaemRegisters:
         data = create_select_valve_registers(
-            VaemAccess.Write.value, vaemValveIndex["AllValves"]
+            VaemAccess.Write.value, valve_indexes["AllValves"]
         )
         return self._transfer_vaem_registers(data)
 
-    @handle_error_response
-    def deselect_all_valves(self):
+    @clear_and_raise_error
+    def deselect_all_valves(self) -> VaemRegisters:
         data = create_select_valve_registers(VaemAccess.Write.value, 0)
         return self._transfer_vaem_registers(data)
 
     ### VALVE SETTINGS OPERATIONS ###
-    @handle_error_response
-    def set_valve_setting(self, valve_id: int, setting: VaemIndex, value: int):
-        valid_range = VaemRanges.get(setting.name)
+    @clear_and_raise_error
+    def set_valve_setting(
+        self, valve_id: int, setting: VaemIndex, value: int
+    ) -> VaemRegisters:
+        valid_range = vaem_ranges.get(setting.name)
         if valid_range is None:
-            self._log.error(f"VaemIndex {setting.name} is not a setting")
-            return
+            raise ValueError(f"VaemIndex {setting.name} is not a setting")
 
         if value not in range(*valid_range) and valve_id not in range(1, 9):
-            self._log.error(
+            raise ValueError(
                 f"{setting.name} must be in range {valid_range[0]} - {valid_range[1] - 1} and valve_id -> 1-8"
             )
-            return
 
         data = create_setting_registers(
             setting,
@@ -232,7 +236,7 @@ class vaemDriver:
         return self._transfer_vaem_registers(data)
 
     def set_multiple_valve_settings(
-        self, valve_id, settings: ValveSettings | dict[str, int] = None
+        self, valve_id, settings: ValveSettings | dict[str, int] | None
     ):
         """Configure settings for a specific valve. This method allows setting various
         parameters for a given valve.
@@ -242,8 +246,7 @@ class vaemDriver:
             settings: ValveSettings object, dict of settings, or None for defaults
         """
         if valve_id not in range(1, 9):
-            self._log.error("valve_id must be between 1-8")
-            return
+            raise ValueError("Valve_id must be between 1-8")
 
         # Handle different input types
         if settings is None:
@@ -259,8 +262,8 @@ class vaemDriver:
         for setting, value in valve_settings.to_enum_dict().items():
             self.set_valve_setting(valve_id, setting, value)
 
-    @handle_error_response
-    def save_settings(self):
+    @clear_and_raise_error
+    def save_settings(self) -> VaemRegisters:
         data = VaemRegisters(
             access=VaemAccess.Write.value,
             dataType=VaemDataType.UINT32.value,
@@ -272,13 +275,12 @@ class vaemDriver:
 
         return self._transfer_vaem_registers(data)
 
-    @handle_error_response
-    def read_valve_setting(self, valve_id, setting: VaemIndex):
+    @clear_and_raise_error
+    def read_valve_setting(self, valve_id, setting: VaemIndex) -> VaemRegisters:
         """Read settings for a specific valve."""
         # Check if parameter is actually a setting
-        if VaemRanges.get(setting.name) is None:
-            self._log.error(f"VaemIndex {setting.name} is not a setting")
-            return
+        if setting.name not in vaem_parameters:
+            raise ValueError(f"VaemIndex {setting.name} is not a setting")
 
         data = create_setting_registers(
             setting,
@@ -290,72 +292,66 @@ class vaemDriver:
     def read_all_valve_settings(self, valve_id: int):
         """Read all settings for a specific valve and returns them as a ValveSettings object"""
         if valve_id not in range(1, 9):
-            self._log.error("valve_id must be between 1-8")
-            return
+            raise ValueError("Valve_id must be between 1-8")
 
-        settings = {}
-        for setting in VaemRanges.keys():
-            value = self.read_valve_setting(valve_id, setting)
+        settings: dict[str, int] = {}
+        for setting in vaem_parameters:
+            value = self.read_valve_setting(valve_id, getattr(VaemIndex, setting))
             if value is not None:
-                settings.update(setting, value.transferValue)
+                settings.update({setting: value.transferValue})
 
         return ValveSettings.from_dict(settings)
 
     ### VALVE OPERATIONS ###
-    @handle_error_response
-    def open_valves(self):
+    @clear_and_raise_error
+    def open_valves(self) -> VaemRegisters:
         """Start all valves that are selected"""
         self._reset_control_word()
-
         data = create_controlword_registers(
             VaemAccess.Write.value, VaemControlWords.StartValves.value
         )
         return self._transfer_vaem_registers(data)
 
-    @handle_error_response
-    def close_valves(self):
+    @clear_and_raise_error
+    def close_valves(self) -> VaemRegisters:
         """Close all valves"""
         self._reset_control_word()
-
         data = create_controlword_registers(
             VaemAccess.Write.value, VaemControlWords.StopValves.value
         )
         return self._transfer_vaem_registers(data)
 
-    @handle_error_response
-    def clear_error(self):
+    @clear_and_raise_error
+    def clear_error(self) -> VaemRegisters:
         """If any error occurs in valve opening, must be cleared with this opperation."""
         self._reset_control_word()
-
         data = create_controlword_registers(
             VaemAccess.Write.value, VaemControlWords.ResetErrors.value
         )
         return self._transfer_vaem_registers(data)
 
-    @handle_error_response
-    def _reset_control_word(self):
+    @clear_and_raise_error
+    def _reset_control_word(self) -> VaemRegisters:
         """Reset control word"""
         data = create_controlword_registers(VaemAccess.Write.value, 0)
         return self._transfer_vaem_registers(data)
 
-    def read_valves_state(self):
-        if not self._vaem_connected:
-            self._log.warning("No VAEM Connected!!")
-            return None
-
-        # get currently selected valves
+    @clear_and_raise_error
+    def _get_selected_valves(self) -> VaemRegisters:
         data = create_select_valve_registers(VaemAccess.Read.value, 0)
-        resp = self._transfer_vaem_registers(data)
+        return self._transfer_vaem_registers(data)
 
-        # Convert to binary and ensure it's 8 bits (pad with leading zeros if needed)
-        binary_string = format(resp.transferValue, "08b")
-        # Convert to list of integers and reverse to match user-expected order
-        states = [int(bit) for bit in binary_string]
-        states.reverse()
+    def read_valves_state(self) -> tuple:
+        resp = self._get_selected_valves()
 
-        return states
+        def convert_to_reverse_binary_list():
+            """See documentation pdf on how to open multiple valves."""
+            binary_string = format(resp.transferValue, "08b")
+            return reversed(int(bit) for bit in binary_string)
 
-    @handle_error_response
+        return tuple(convert_to_reverse_binary_list())
+
+    @clear_and_raise_error
     def _read_status_word(self):
         """
         Read the statusword
@@ -381,25 +377,3 @@ class vaemDriver:
         -> error: 1 if error in valves is present
         """
         return parse_statusword(self._read_status_word().to_list())
-
-    def wait_for_readiness(self, timeout=10.0):
-        """
-        Wait for the device to be ready with a timeout.
-        """
-        start_time = time.time()
-
-        while True:
-            # Check if timeout has been exceeded
-            if time.time() - start_time > timeout:
-                self._log.warning(
-                    f"Timeout waiting for device readiness after {timeout} seconds"
-                )
-                return False
-
-            readiness = self.get_status()["Readiness"]
-            if readiness == 0:
-                time.sleep(0.1)
-                print(readiness)
-                pass
-            else:
-                return True

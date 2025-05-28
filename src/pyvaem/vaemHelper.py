@@ -1,6 +1,6 @@
-from enum import IntEnum
-from dataclasses import dataclass
 import struct
+from dataclasses import dataclass
+from enum import IntEnum
 
 
 class VaemIndex(IntEnum):
@@ -18,13 +18,25 @@ class VaemIndex(IntEnum):
     HitNHold = 0x2E
 
 
-VaemRanges: dict[str, tuple] = {
+vaem_parameters: list[str] = [
+    "NominalVoltage",
+    "InrushCurrent",
+    "HoldingCurrent",
+    "ResponseTime",
+    "PickUpTime",
+    "SelectValve",
+    "TimeDelay",
+    "HitNHold",
+]
+
+
+vaem_ranges: dict[str, tuple] = {
     "NominalVoltage": (8000, 24000 + 1),
     "InrushCurrent": (20, 1000 + 1),
     "HoldingCurrent": (20, 400 + 1),
-    "ResponseTime": (1, (2**32) -1 + 1),
+    "ResponseTime": (1, (2**32) - 1 + 1),
     "PickUpTime": (1, 500 + 1),
-    "TimeDelay": (0, (2**32) -1 + 1),
+    "TimeDelay": (0, (2**32) - 1 + 1),
     "HitNHold": (0, 1000 + 1),
     "SelectValve": (0, 255 + 1),
 }
@@ -52,7 +64,7 @@ class ValveSettings:
     }
 
     @classmethod
-    def from_dict(cls, data: dict = None) -> "ValveSettings":
+    def from_dict(cls, data: dict | None = None) -> "ValveSettings":
         """Create ValveSettings from dictionary with defaults for missing values."""
         if not data:
             return cls()
@@ -70,7 +82,7 @@ class ValveSettings:
         }
 
 
-vaemValveIndex = {
+valve_indexes = {
     1: 0x01,
     2: 0x02,
     3: 0x04,
@@ -93,28 +105,12 @@ class VaemRegisters:
     transferValue: int
 
     @classmethod
-    def from_dict(self, data: dict) -> "VaemRegisters":
-        """Constructs a VaemRegisters object from a dictionary."""
-        if data is None or len(data) == 0:
-            return None
-        return VaemRegisters(
-            access=data["access"],
-            dataType=data["dataType"],
-            paramIndex=data["paramIndex"],
-            paramSubIndex=data["paramSubIndex"],
-            errorRet=data["errorRet"],
-            transferValue=data["transferValue"],
-        )
-
-    def to_dict(self) -> dict:
-        """Converts the VaemRegisters object to a dictionary."""
-        return self.__dict__
-
-    @classmethod
     def from_list(cls, registers: list[int]) -> "VaemRegisters":
         """Constructs a VaemRegisters object from a list of integers."""
         if registers is None or len(registers) == 0:
-            return None
+            raise ValueError(
+                "Cannot create VaemRegisters from empty or None registers list"
+            )
         return _deconstruct_registers(registers)
 
     def to_list(self) -> list[int]:
@@ -123,24 +119,19 @@ class VaemRegisters:
 
 
 def _construct_registers(vaem_reg: VaemRegisters) -> list[int]:
-    data = vaem_reg.to_dict()
     tmp = struct.pack(
         ">BBHBBQ",
-        data["access"],
-        data["dataType"],
-        data["paramIndex"],
-        data["paramSubIndex"],
-        data["errorRet"],
-        data["transferValue"],
+        vaem_reg.access,
+        vaem_reg.dataType,
+        vaem_reg.paramIndex,
+        vaem_reg.paramSubIndex,
+        vaem_reg.errorRet,
+        vaem_reg.transferValue,
     )
-
     return [(tmp[i] << 8) + tmp[i + 1] for i in range(0, len(tmp) - 1, 2)]
 
 
 def _deconstruct_registers(registers: list[int]) -> VaemRegisters:
-    if registers is None or len(registers) == 0:
-        return None
-
     access = (registers[0] & 0xFF00) >> 8
     dataType = registers[0] & 0x00FF
     paramIndex = registers[1]
@@ -205,7 +196,7 @@ SETTING_DATA_TYPES = {
     VaemIndex.ResponseTime: VaemDataType.UINT32,
     VaemIndex.InrushCurrent: VaemDataType.UINT16,
     VaemIndex.HoldingCurrent: VaemDataType.UINT16,
-    VaemIndex.PickUpTime: VaemDataType.UINT32, # Documentation says UINT16 but it requires UINT32
+    VaemIndex.PickUpTime: VaemDataType.UINT32,  # Documentation says UINT16 but it requires UINT32
     VaemIndex.TimeDelay: VaemDataType.UINT32,
     VaemIndex.HitNHold: VaemDataType.UINT32,
     VaemIndex.SelectValve: VaemDataType.UINT8,
