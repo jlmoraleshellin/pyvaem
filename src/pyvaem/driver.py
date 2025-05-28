@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Callable, Concatenate, ParamSpec, TypeVar
 
 from pymodbus.client import ModbusTcpClient as TcpClient
@@ -274,6 +275,7 @@ class VaemDriver:
     def open_valves(self) -> VaemRegisters:
         """Start all valves that are selected"""
         self._reset_control_word()
+        time.sleep(0.1)
         data = create_controlword_registers(
             VaemAccess.Write.value, VaemControlWords.StartValves.value
         )
