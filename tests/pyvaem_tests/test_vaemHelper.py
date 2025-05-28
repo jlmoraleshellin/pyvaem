@@ -2,9 +2,9 @@ import pytest
 from pyvaem.vaemHelper import VaemIndex, VaemRegisters, ValveSettings
 
 
-def test_when_registers_created_from_empty_list_returns_none():
-    registers = VaemRegisters.from_list([])
-    assert registers is None
+def test_when_registers_created_from_empty_list_raises_error():
+    with pytest.raises(ValueError):
+        VaemRegisters.from_list([])
 
 
 @pytest.mark.parametrize(
