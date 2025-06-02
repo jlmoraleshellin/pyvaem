@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyvaem"
-version = "0.0.0"
+version = "1.0.0"
 description = "Python API for VAEM Festo valve control module"
 authors = ["Jose <jlmoraleshellin@gmail.com>"]
 license = "Apache-2.0"
@@ -8,8 +8,11 @@ readme = "README.md"
 repository = "https://github.com/jlmoraleshellin/pyvaem"
 
 [tool.poetry.dependencies]
-python = ">=3.8,<4.0"
-pymodbus = "^2.5.0"
+python = ">=3.10,<4.0"
+pymodbus = "^3.0.0"
+
+[tool.poetry.group.dev.dependencies]
+mypy = "^1.15.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
