@@ -1,17 +1,21 @@
 # 🐍 PyVaem
 
 ## 📋 Overview
+
 This Python API provides control for the [Festo VAEM](https://www.festo.com/de/en/a/8088772/) valve control module via Modbus TCP/IP communication. It is based on the [original VAEM driver](https://github.com/Festo-se/VAEM) and features comprehensive refactoring and improvements.
 
 ## 🛠️ Requirements
+
 - **Python**: 3.10 or higher
 
 ### 📚 Core Dependencies
+
 - [PyModbus v3.0+](https://pymodbus.readthedocs.io/)
 
 ## 🚀 Installation
 
 ### Option 1: From Source
+
 ```bash
 # Clone the repository
 git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
@@ -28,6 +32,7 @@ pip install -e .
 ## 📖 Quick Start
 
 ### Basic Usage
+
 ```python
 from pyvaem import VaemDriver, VaemConfig, ValveSettings
 
@@ -57,6 +62,7 @@ vaem.close_valves()
 ```
 
 ### Valve Configuration
+
 ```python
 # Configure valve settings
 settings = ValveSettings(
@@ -104,13 +110,17 @@ See [`example_usage.py`](src/example_usage.py).
 ### Core classes and methods
 
 #### VaemDriver
+
 The main driver class for controlling VAEM devices.
 
 **Constructor:**
+
 - `VaemDriver(vaem_config: VaemConfig)`
 
 #### VaemConfig
+
 Configuration dataclass for VAEM connection parameters.
+
 ```python
 @dataclass
 class VaemConfig:
@@ -120,7 +130,9 @@ class VaemConfig:
 ```
 
 #### ValveSettings
+
 Configuration dataclass for valve parameters with VAEM defaults.
+
 ```python
 @dataclass
 class ValveSettings:
@@ -167,6 +179,7 @@ The driver includes comprehensive error handling with specific exception types:
 - `ValueError` - Parameter value out of range or invalid
 - `TypeError` - Incorrect data type
 - `RuntimeError` - Command execution failed
+- `ConnectionError` - Failed to connect to VAEM device
 
 All valve operations are automatically wrapped with error checking and clearing.
 
@@ -184,18 +197,20 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ## 🙏 Attribution
 
-This project is based on the original VAEM driver developed by Milen Kolev (milen.kolev@festo.com) and the Festo team. The original project provided the foundation for this improved implementation.
+This project is based on the original VAEM driver developed by Milen Kolev (<milen.kolev@festo.com>) and the Festo team. The original project provided the foundation for this improved implementation.
 
 **Original Repository**: [Festo VAEM Driver](https://github.com/Festo-se/VAEM)
 
 ## 📧 Contact
 
 For questions, issues, or contributions:
-- **Email**: jlmoraleshellin@gmail.com
+
+- **Email**: <jlmoraleshellin@gmail.com>
 
 ## 🔄 Changelog
 
 ### Version 1.0.0 (Current)
+
 - Complete rewrite with improved architecture
 - Enhanced error handling with specific exception types
 - Comprehensive valve configuration with ValveSettings dataclass
@@ -205,6 +220,7 @@ For questions, issues, or contributions:
 - Automatic error clearing on operations
 
 ### Version 0.0.2 (Original)
+
 - Basic VAEM control functionality
 - Modbus TCP communication
 - Simple valve operations
