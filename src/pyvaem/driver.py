@@ -313,12 +313,12 @@ class VaemDriver:
     def read_valves_state(self) -> tuple:
         resp = self._get_selected_valves()
 
-        def convert_to_reverse_binary_list():
+        def convert_to_reverse_binary_list() -> tuple:
             """See documentation pdf on how to open multiple valves."""
             binary_string = format(resp.transferValue, "08b")
-            return reversed(tuple(int(bit) for bit in binary_string))
+            return tuple(int(bit) for bit in reversed(binary_string))
 
-        return tuple(convert_to_reverse_binary_list())
+        return convert_to_reverse_binary_list()
 
     @clear_and_raise_error
     def _read_status_word(self):
