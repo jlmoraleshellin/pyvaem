@@ -14,20 +14,20 @@ This Python API provides control for the [Festo VAEM](https://www.festo.com/de/e
 
 ## 🚀 Installation
 
-### Option 1: From Source
+### Option 1: From GitHub Releases (Recommended)
 
 ```bash
-# Clone the repository
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git
-cd YOUR_REPO_NAME
-
 # Create virtual environment (recommended)
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Install in development mode
-pip install -e .
+# Install the latest release from GitHub
+pip install https://github.com/jlmoraleshellin/pyvaem/releases/download/v1.0.0/pyvaem-1.0.0-py3-none-any.whl
 ```
+
+### Option 2: From PyPI
+
+Coming soon...
 
 ## 📖 Quick Start
 
