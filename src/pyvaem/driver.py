@@ -275,7 +275,7 @@ class VaemDriver:
     def open_valves(self) -> VaemRegisters:
         """Start all valves that are selected"""
         self._reset_control_word()
-        time.sleep(0.1)
+        time.sleep(0.1) # A small delay is needed to ensure the control word is reset before writing the start valves command
         data = create_controlword_registers(
             VaemAccess.Write.value, VaemControlWords.StartValves.value
         )
